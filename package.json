@@ -4,13 +4,21 @@
 	"scripts": {
 		"dev": "wrangler dev",
 		"deploy": "wrangler deploy --minify",
-		"cf-typegen": "wrangler types --env-interface CloudflareBindings"
+		"cf-typegen": "wrangler types --env-interface CloudflareBindings",
+		"build:frontend": "cd frontend && pnpm build",
+		"dev:frontend": "cd frontend && pnpm dev",
+		"lint": "biome check src/",
+		"lint:fix": "biome check --write src/",
+		"typecheck": "tsc --noEmit",
+		"typecheck:frontend": "cd frontend && pnpm tsc -b"
 	},
 	"dependencies": {
 		"hono": "^4.12.18"
 	},
 	"devDependencies": {
+		"@biomejs/biome": "2.4.15",
 		"@types/node": "^25.8.0",
+		"typescript": "^6.0.3",
 		"wrangler": "^4.91.0"
 	}
 }
