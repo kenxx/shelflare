@@ -1,6 +1,6 @@
 # prod
 dist/
-public/_dash/
+public/
 
 # dev
 .yarn/

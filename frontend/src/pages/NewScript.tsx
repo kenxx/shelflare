@@ -19,9 +19,15 @@ export function NewScript() {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
+  const KEY_RE = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/;
+
   const handleSave = async () => {
     if (!key.trim()) {
       setError("Script key is required");
+      return;
+    }
+    if (!KEY_RE.test(key.trim())) {
+      setError("Key must start with a letter or number, and contain only letters, numbers, hyphens, and underscores");
       return;
     }
     try {
