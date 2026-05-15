@@ -166,13 +166,24 @@ type ToolCall = {
 };
 
 api.post("/chat", requireAuth, async (c) => {
-	const { messages } = await c.req.json<{
+	const { messages, attachments } = await c.req.json<{
 		messages: { role: string; content: string }[];
+		attachments?: { key: string; content: string }[];
 	}>();
 
 	const kv = scripts(c.env.SCRIPTS);
+
+	let sysPrompt = SYSTEM_PROMPT;
+	if (attachments?.length) {
+		sysPrompt +=
+			"\n\n[已附加脚本上下文]\n" +
+			attachments
+				.map((a) => `### ${a.key}\n\`\`\`bash\n${a.content}\n\`\`\``)
+				.join("\n\n");
+	}
+
 	const history: object[] = [
-		{ role: "system", content: SYSTEM_PROMPT },
+		{ role: "system", content: sysPrompt },
 		...messages,
 	];
 	const apiKey = c.env.DEEPSEEK_API_KEY;
