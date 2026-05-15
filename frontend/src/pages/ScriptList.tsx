@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { api, type ScriptKey } from "@/lib/api";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { api, type ScriptKey } from "@/lib/api";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -21,7 +21,7 @@ export function ScriptList() {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
-  const load = async () => {
+  const load = useCallback(async () => {
     try {
       setLoading(true);
       const data = await api.listScripts();
@@ -31,11 +31,11 @@ export function ScriptList() {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     void load();
-  }, []);
+  }, [load]);
 
   const handleDelete = async (key: string) => {
     await api.deleteScript(key);
@@ -58,6 +58,9 @@ export function ScriptList() {
               }}
             >
               Logout
+            </Button>
+            <Button variant="outline" onClick={() => navigate("/_dash/chat")}>
+              AI 助手
             </Button>
             <Button onClick={() => navigate("/_dash/new")}>New Script</Button>
           </div>
