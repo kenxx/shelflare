@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { buttonVariants } from "@/components/ui/button";
 import {
@@ -10,10 +11,28 @@ import {
 import { cn } from "@/lib/utils";
 
 function CodeBlock({ children }: { children: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const copy = () => {
+    void navigator.clipboard.writeText(children).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
   return (
-    <pre className="mt-2 rounded-md bg-muted px-4 py-3 font-mono text-sm overflow-x-auto">
-      {children}
-    </pre>
+    <div className="relative mt-2 group">
+      <pre className="rounded-md bg-muted px-4 py-3 font-mono text-sm whitespace-pre-wrap break-all pr-16">
+        {children}
+      </pre>
+      <button
+        type="button"
+        onClick={copy}
+        className="absolute top-2 right-2 px-2 py-1 rounded text-xs bg-background border border-border text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
+      >
+        {copied ? "Copied!" : "Copy"}
+      </button>
+    </div>
   );
 }
 
@@ -97,7 +116,7 @@ export function Home() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <CodeBlock>{`curl "${origin}/_proxy?url=https://raw.githubusercontent.com/…"`}</CodeBlock>
+              <CodeBlock>{`curl "${origin}/_proxy/https://raw.githubusercontent.com/…"`}</CodeBlock>
             </CardContent>
           </Card>
         </div>

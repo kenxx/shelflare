@@ -7,6 +7,9 @@
 	"name": "shelflare",
 	"main": "src/index.ts",
 	"compatibility_date": "2026-05-15",
+	"build": {
+		"command": "pnpm build:frontend"
+	},
 	"assets": {
 		"binding": "ASSETS",
 		"directory": "./public",
