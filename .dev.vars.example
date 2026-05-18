@@ -1,0 +1,2 @@
+ADMIN_PASSWORD=     # Dashboard login password
+DEEPSEEK_API_KEY=   # API key from platform.deepseek.com
