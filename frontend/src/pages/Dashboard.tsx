@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   AssistantRuntimeProvider,
   ComposerPrimitive,
@@ -11,7 +11,7 @@ import {
 import { Pencil, Plus, Send, Trash2 } from "lucide-react";
 import { api, type ScriptKey } from "@/lib/api";
 import { type ScriptContext, createShelflareAdapter } from "@/lib/chatRuntime";
-import { ScriptPanel } from "@/components/ScriptPanel";
+import { type PanelMode, ScriptPanel } from "@/components/ScriptPanel";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -72,14 +72,11 @@ export function Dashboard() {
   const [scripts, setScripts] = useState<ScriptKey[]>([]);
   const [selected, setSelected] = useState<ScriptContext | null>(null);
   const [selecting, setSelecting] = useState<string | null>(null);
-  const [pendingDiff, setPendingDiff] = useState<{
-    old: string;
-    new: string;
-  } | null>(null);
+  const [pendingDiff, setPendingDiff] = useState<{ old: string; new: string } | null>(null);
+  const [mode, setMode] = useState<PanelMode>("view");
 
   // Stable refs for adapter closures
   const selectedRef = useRef<ScriptContext | null>(null);
-  const loadRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     selectedRef.current = selected;
@@ -93,10 +90,6 @@ export function Dashboard() {
       // silently ignore
     }
   }, []);
-
-  useEffect(() => {
-    loadRef.current = () => void loadScripts();
-  }, [loadScripts]);
 
   useEffect(() => {
     void loadScripts();
@@ -130,7 +123,12 @@ export function Dashboard() {
   const runtime = useLocalRuntime(adapter);
 
   const selectScript = async (key: string) => {
-    if (selected?.key === key) {
+    if (mode !== "view") {
+      // cancel any ongoing edit, stay on same script if applicable
+      setMode("view");
+      setPendingDiff(null);
+      if (selected?.key === key) return;
+    } else if (selected?.key === key) {
       setSelected(null);
       setPendingDiff(null);
       return;
@@ -145,7 +143,44 @@ export function Dashboard() {
     }
   };
 
+  const handleEnterEdit = async (key: string) => {
+    if (selected?.key !== key) {
+      setSelecting(key);
+      try {
+        const { content } = await api.getScript(key);
+        setSelected({ key, content });
+      } finally {
+        setSelecting(null);
+      }
+    }
+    setPendingDiff(null);
+    setMode("edit");
+  };
+
+  const enterNewMode = () => {
+    setSelected(null);
+    setPendingDiff(null);
+    setMode("new");
+  };
+
+  const cancelEdit = () => {
+    setMode("view");
+  };
+
+  const handleSave = async (key: string, content: string) => {
+    if (mode === "new") {
+      await api.createScript(key, content);
+      await loadScripts();
+      setSelected({ key, content });
+    } else {
+      await api.updateScript(key, content);
+      setSelected({ key, content });
+    }
+    setMode("view");
+  };
+
   const handleDelete = async (key: string) => {
+    if (mode !== "view" && selected?.key === key) setMode("view");
     await api.deleteScript(key);
     if (selected?.key === key) {
       setSelected(null);
@@ -192,7 +227,7 @@ export function Dashboard() {
                 variant="ghost"
                 size="icon"
                 className="h-6 w-6"
-                onClick={() => navigate("/_dash/new")}
+                onClick={enterNewMode}
               >
                 <Plus className="h-3.5 w-3.5" />
               </Button>
@@ -237,15 +272,16 @@ export function Dashboard() {
                         className="hidden group-hover:flex items-center gap-0.5"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <Link
-                          to={`/_dash/edit/${encodeURIComponent(s.name)}`}
+                        <button
+                          type="button"
                           className={cn(
                             buttonVariants({ variant: "ghost", size: "icon" }),
                             "h-6 w-6",
                           )}
+                          onClick={() => void handleEnterEdit(s.name)}
                         >
                           <Pencil className="h-3 w-3" />
-                        </Link>
+                        </button>
                         <button
                           type="button"
                           className={cn(
@@ -264,12 +300,16 @@ export function Dashboard() {
             </div>
           </aside>
 
-          {/* Middle: script content / diff */}
+          {/* Middle: script content / diff / edit / new */}
           <ScriptPanel
             selected={selected}
             pendingDiff={pendingDiff}
+            mode={mode}
             onAccept={handleAccept}
             onReject={handleReject}
+            onSave={handleSave}
+            onCancelEdit={cancelEdit}
+            onEnterEdit={() => setMode("edit")}
           />
 
           {/* Right: AI chat */}
