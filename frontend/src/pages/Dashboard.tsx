@@ -349,7 +349,10 @@ export function Dashboard() {
                 <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground py-16">
                   <p className="text-sm font-medium mb-1">AI 脚本助手</p>
                   <p className="text-xs">
-                    选中左侧脚本开始对话，或描述需要创建的脚本。
+                    直接描述你需要的脚本，AI 帮你创建。
+                  </p>
+                  <p className="text-xs mt-1">
+                    或先选中左侧脚本，再让 AI 修改。
                   </p>
                 </div>
               </ThreadPrimitive.Empty>
