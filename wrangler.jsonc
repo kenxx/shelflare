@@ -8,7 +8,7 @@
 	"main": "src/index.ts",
 	"compatibility_date": "2026-05-15",
 	"build": {
-		"command": "pnpm build:frontend"
+		"command": "pnpm build"
 	},
 	"assets": {
 		"binding": "ASSETS",

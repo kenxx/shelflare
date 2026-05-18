@@ -9,7 +9,7 @@ curl https://your-worker.workers.dev/install | sh
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/kenxx/shelflare)
 
 > **Workers Builds setup** — when prompted for build settings, use:
-> - **Build command**: `pnpm install && pnpm build:frontend`
+> - **Build command**: `pnpm install && pnpm build`
 > - **Deploy command**: `npx wrangler deploy --minify`
 
 ## Features
