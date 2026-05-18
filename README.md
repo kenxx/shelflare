@@ -8,6 +8,10 @@ curl https://your-worker.workers.dev/install | sh
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/kenxx/shelflare)
 
+> **Workers Builds setup** — when prompted for build settings, use:
+> - **Build command**: `pnpm install && pnpm build:frontend`
+> - **Deploy command**: `npx wrangler deploy --minify`
+
 ## Features
 
 - **One-liner execution** — scripts are served as plain text, pipe directly into `sh` or `bash`
@@ -30,7 +34,6 @@ curl https://your-worker.workers.dev/install | sh
 git clone https://github.com/kenxx/shelflare
 cd shelflare
 pnpm install
-cd frontend && pnpm install && cd ..
 ```
 
 ### 3. Create a KV namespace
