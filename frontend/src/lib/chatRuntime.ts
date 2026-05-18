@@ -1,13 +1,14 @@
 import type { ChatModelAdapter } from "@assistant-ui/react";
 
-export type Attachment = { key: string; content: string };
+export type ScriptContext = { key: string; content: string };
 
 export function createShelflareAdapter(
-  getAttachments: () => Attachment[],
-  onComplete?: () => void,
+  getContext: () => ScriptContext | null,
+  onComplete?: (contextBefore: ScriptContext | null) => void,
 ): ChatModelAdapter {
   return {
     async *run({ messages, abortSignal }) {
+      const contextBefore = getContext();
       const token = localStorage.getItem("token");
       const apiMessages = messages.map((m) => ({
         role: m.role as string,
@@ -23,10 +24,7 @@ export function createShelflareAdapter(
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({
-          messages: apiMessages,
-          attachments: getAttachments(),
-        }),
+        body: JSON.stringify({ messages: apiMessages, context: contextBefore }),
         signal: abortSignal,
       });
 
@@ -66,7 +64,7 @@ export function createShelflareAdapter(
           }
         }
       } finally {
-        onComplete?.();
+        onComplete?.(contextBefore);
       }
     },
   };
