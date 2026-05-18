@@ -8,7 +8,7 @@ import {
   useLocalRuntime,
   type TextMessagePartProps,
 } from "@assistant-ui/react";
-import { Pencil, Plus, Send, Trash2 } from "lucide-react";
+import { Loader2, Pencil, Plus, Send, Trash2 } from "lucide-react";
 import { api, type ScriptKey } from "@/lib/api";
 import { type ScriptContext, createShelflareAdapter } from "@/lib/chatRuntime";
 import { type PanelMode, ScriptPanel } from "@/components/ScriptPanel";
@@ -359,6 +359,15 @@ export function Dashboard() {
               <ThreadPrimitive.Messages
                 components={{ UserMessage, AssistantMessage }}
               />
+              <ThreadPrimitive.If running>
+                <div className="flex justify-start mb-4">
+                  <div className="rounded-2xl rounded-bl-sm bg-muted px-4 py-3 flex gap-1 items-center">
+                    <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/60 animate-bounce [animation-delay:0ms]" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/60 animate-bounce [animation-delay:150ms]" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/60 animate-bounce [animation-delay:300ms]" />
+                  </div>
+                </div>
+              </ThreadPrimitive.If>
             </ThreadPrimitive.Viewport>
 
             <div className="border-t p-3 shrink-0">
@@ -372,11 +381,18 @@ export function Dashboard() {
                   rows={1}
                   className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-[38px] max-h-[100px] overflow-y-auto"
                 />
-                <ComposerPrimitive.Send
-                  className={cn(buttonVariants({ size: "icon" }), "shrink-0 h-9 w-9")}
-                >
-                  <Send className="h-4 w-4" />
-                </ComposerPrimitive.Send>
+                <ThreadPrimitive.If running={false}>
+                  <ComposerPrimitive.Send
+                    className={cn(buttonVariants({ size: "icon" }), "shrink-0 h-9 w-9")}
+                  >
+                    <Send className="h-4 w-4" />
+                  </ComposerPrimitive.Send>
+                </ThreadPrimitive.If>
+                <ThreadPrimitive.If running>
+                  <div className={cn(buttonVariants({ size: "icon", variant: "outline" }), "shrink-0 h-9 w-9 pointer-events-none")}>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  </div>
+                </ThreadPrimitive.If>
               </ComposerPrimitive.Root>
             </div>
           </ThreadPrimitive.Root>
