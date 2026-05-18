@@ -4,7 +4,7 @@ import { EditorState } from "@codemirror/state";
 import { StreamLanguage } from "@codemirror/language";
 import { shell } from "@codemirror/legacy-modes/mode/shell";
 import { oneDark } from "@codemirror/theme-one-dark";
-import { unifiedMergeView } from "@codemirror/merge";
+import { MergeView } from "@codemirror/merge";
 import { Button } from "@/components/ui/button";
 
 interface ScriptPanelProps {
@@ -22,6 +22,9 @@ const editorTheme = EditorView.theme({
     fontFamily: "monospace",
     fontSize: "13px",
   },
+  // MergeView wraps both editors in .cm-mergeView
+  ".cm-mergeView": { height: "100%" },
+  ".cm-mergeViewEditors": { height: "100%" },
 });
 
 export function ScriptPanel({
@@ -35,30 +38,31 @@ export function ScriptPanel({
   useEffect(() => {
     if (!containerRef.current || !selected) return;
 
-    const extensions = [
-      basicSetup,
-      StreamLanguage.define(shell),
-      oneDark,
-      EditorState.readOnly.of(true),
-      editorTheme,
-    ];
+    const sharedExts = [basicSetup, StreamLanguage.define(shell), oneDark, editorTheme];
 
     if (pendingDiff) {
-      extensions.push(
-        unifiedMergeView({ original: pendingDiff.old, mergeControls: false }),
-      );
+      const mv = new MergeView({
+        a: {
+          doc: pendingDiff.old,
+          extensions: [...sharedExts, EditorState.readOnly.of(true)],
+        },
+        b: {
+          doc: pendingDiff.new,
+          extensions: [...sharedExts, EditorState.readOnly.of(true)],
+        },
+        parent: containerRef.current,
+      });
+      return () => mv.destroy();
     }
 
     const view = new EditorView({
       state: EditorState.create({
-        doc: pendingDiff ? pendingDiff.new : selected.content,
-        extensions,
+        doc: selected.content,
+        extensions: [...sharedExts, EditorState.readOnly.of(true)],
       }),
       parent: containerRef.current,
     });
-
     return () => view.destroy();
-    // selected.key + selected.content + pendingDiff fully determine editor state
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selected?.key, selected?.content, pendingDiff]);
 
