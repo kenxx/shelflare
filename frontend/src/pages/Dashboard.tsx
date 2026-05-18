@@ -12,6 +12,17 @@ import { Pencil, Plus, Send, Trash2 } from "lucide-react";
 import { api, type ScriptKey } from "@/lib/api";
 import { type ScriptContext, createShelflareAdapter } from "@/lib/chatRuntime";
 import { type PanelMode, ScriptPanel } from "@/components/ScriptPanel";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -282,16 +293,33 @@ export function Dashboard() {
                         >
                           <Pencil className="h-3 w-3" />
                         </button>
-                        <button
-                          type="button"
-                          className={cn(
-                            buttonVariants({ variant: "ghost", size: "icon" }),
-                            "h-6 w-6 hover:text-destructive",
-                          )}
-                          onClick={() => void handleDelete(s.name)}
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </button>
+                        <AlertDialog>
+                          <AlertDialogTrigger
+                            className={cn(
+                              buttonVariants({ variant: "ghost", size: "icon" }),
+                              "h-6 w-6 hover:text-destructive",
+                            )}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </AlertDialogTrigger>
+                          <AlertDialogContent size="sm">
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>删除脚本</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                确定要删除 <span className="font-mono font-medium text-foreground">{s.name}</span> 吗？此操作无法撤销。
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>取消</AlertDialogCancel>
+                              <AlertDialogAction
+                                variant="destructive"
+                                onClick={() => void handleDelete(s.name)}
+                              >
+                                删除
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
                     </div>
                   );
