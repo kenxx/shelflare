@@ -26,9 +26,7 @@
 	],
 	"kv_namespaces": [
 		{
-			"binding": "SCRIPTS",
-			"id": "9dfd2e82378448caa69eeb75f801a3c5",
-			"preview_id": "8d8e68bbe89440dfb11e01b25ba12670"
+			"binding": "SCRIPTS"
 		}
 	],
 	"vars": {
