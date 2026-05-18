@@ -111,16 +111,12 @@ export function Dashboard() {
       void loadScripts();
       if (!contextBefore) return;
       try {
-        const { content: newContent } = await api.getScript(contextBefore.key);
-        if (
-          newContent !== contextBefore.content &&
-          selectedRef.current?.key === contextBefore.key
-        ) {
-          setPendingDiff({ old: contextBefore.content, new: newContent });
-          setSelected({ key: contextBefore.key, content: newContent });
+        const { content: unsavedContent } = await api.getUnsavedScript(contextBefore.key);
+        if (selectedRef.current?.key === contextBefore.key) {
+          setPendingDiff({ old: contextBefore.content, new: unsavedContent });
         }
       } catch {
-        // ignore fetch errors
+        // 404 = AI 没有存草稿（如新建脚本），无需 diff
       }
     },
     [loadScripts],
@@ -200,12 +196,18 @@ export function Dashboard() {
     await loadScripts();
   };
 
-  const handleAccept = () => setPendingDiff(null);
+  const handleAccept = async () => {
+    if (!selected || !pendingDiff) return;
+    await api.updateScript(selected.key, pendingDiff.new);
+    await api.deleteUnsavedScript(selected.key);
+    setSelected({ key: selected.key, content: pendingDiff.new });
+    setPendingDiff(null);
+  };
 
   const handleReject = async () => {
     if (!selected || !pendingDiff) return;
-    await api.updateScript(selected.key, pendingDiff.old);
-    setSelected({ key: selected.key, content: pendingDiff.old });
+    await api.deleteUnsavedScript(selected.key);
+    // 原始 key 从未被修改，无需还原
     setPendingDiff(null);
   };
 

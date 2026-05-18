@@ -76,4 +76,14 @@ export const api = {
     apiFetch(`/scripts/${encodeURIComponent(key)}`, {
       method: "DELETE",
     }).then((r) => r.json()),
+
+  getUnsavedScript: (key: string) =>
+    apiFetch(`/unsaved/${encodeURIComponent(key)}`).then(
+      (r) => r.json() as Promise<{ key: string; content: string }>,
+    ),
+
+  deleteUnsavedScript: (key: string) =>
+    apiFetch(`/unsaved/${encodeURIComponent(key)}`, { method: "DELETE" }).then(
+      (r) => r.json(),
+    ),
 };

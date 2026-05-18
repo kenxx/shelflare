@@ -22,7 +22,7 @@ interface ScriptPanelProps {
   selected: { key: string; content: string } | null;
   pendingDiff: { old: string; new: string } | null;
   mode: PanelMode;
-  onAccept: () => void;
+  onAccept: () => void | Promise<void>;
   onReject: () => Promise<void>;
   onSave: (key: string, content: string) => Promise<void>;
   onCancelEdit: () => void;
@@ -221,7 +221,7 @@ export function ScriptPanel({
         </div>
         {pendingDiff && (
           <div className="flex gap-1.5">
-            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={onAccept}>
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => void onAccept()}>
               Accept
             </Button>
             <Button

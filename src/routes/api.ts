@@ -109,6 +109,21 @@ api.delete("/scripts/:key", requireAuth, async (c) => {
 	return c.json({ key, success: true });
 });
 
+// 获取 unsaved 草稿
+api.get("/unsaved/:key", requireAuth, async (c) => {
+	const key = c.req.param("key") ?? "";
+	const content = await c.env.SCRIPTS.get(`unsaved:${key}`);
+	if (content === null) return c.json({ error: "No draft found" }, 404);
+	return c.json({ key, content });
+});
+
+// 删除 unsaved 草稿（Reject 时调用）
+api.delete("/unsaved/:key", requireAuth, async (c) => {
+	const key = c.req.param("key") ?? "";
+	await c.env.SCRIPTS.delete(`unsaved:${key}`);
+	return c.json({ key, success: true });
+});
+
 // AI 聊天（流式，支持 tool calling）
 const DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 
@@ -282,6 +297,13 @@ api.post("/chat", requireAuth, async (c) => {
 						if (tc.name === "save_script") {
 							if (!KEY_RE.test(args.key ?? "")) {
 								result = `Error: invalid key "${args.key}"`;
+							} else if (context?.key === args.key) {
+								// 编辑已有脚本：存草稿，不覆盖原始
+								await c.env.SCRIPTS.put(
+									`unsaved:${args.key}`,
+									args.content ?? "",
+								);
+								result = `Saved draft for "${args.key}". The user will review and accept or reject the change.`;
 							} else {
 								await kv.put(args.key, args.content ?? "");
 								result = `Saved script "${args.key}" successfully.`;
