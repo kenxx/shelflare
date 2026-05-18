@@ -128,8 +128,17 @@ api.delete("/unsaved/:key", requireAuth, async (c) => {
 const DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
 
 const SYSTEM_PROMPT =
-	"你是一个 shell 脚本专家，帮助用户编写、调试和改进 bash/zsh/sh 脚本。" +
-	"当用户要求保存脚本时，主动调用 save_script 工具。回答简洁，脚本用代码块包裹。";
+	"你是 shelflare 的 AI 助手。shelflare 是一个基于 Cloudflare Workers 的 shell 脚本托管平台，" +
+	"用户可以通过 `curl {origin}/{key} | sh` 直接拉取并执行脚本。\n\n" +
+	"你的职责：\n" +
+	"- 帮助用户编写、调试和改进 bash/zsh/sh 脚本\n" +
+	"- 当用户要求修改或保存脚本时，主动调用 save_script 工具\n" +
+	"- 如有当前编辑中的脚本（见下方上下文），修改后会以草稿形式保存，用户需在界面上 Accept 才会生效\n\n" +
+	"注意事项：\n" +
+	"- 脚本通过 curl | sh 执行，务必注意安全性和健壮性，推荐 `set -euo pipefail`\n" +
+	"- key 只能包含字母、数字、连字符和下划线，以字母或数字开头\n" +
+	"- 保存后告知用户执行命令，格式为 `curl {origin}/{key} | sh`\n" +
+	"- 回答简洁，脚本用代码块包裹";
 
 const TOOLS = [
 	{
@@ -187,10 +196,11 @@ api.post("/chat", requireAuth, async (c) => {
 	}>();
 
 	const kv = scripts(c.env.SCRIPTS);
+	const origin = new URL(c.req.url).origin;
 
-	let sysPrompt = SYSTEM_PROMPT;
+	let sysPrompt = SYSTEM_PROMPT.replaceAll("{origin}", origin);
 	if (context) {
-		sysPrompt += `\n\n[当前编辑脚本: ${context.key}]\n\`\`\`bash\n${context.content}\n\`\`\``;
+		sysPrompt += `\n\n[当前编辑脚本: ${context.key}]\n执行命令: curl ${origin}/${context.key} | sh\n\`\`\`bash\n${context.content}\n\`\`\``;
 	}
 
 	const history: object[] = [
