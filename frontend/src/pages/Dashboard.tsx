@@ -271,7 +271,7 @@ export function Dashboard() {
                     <div
                       key={s.name}
                       className={cn(
-                        "group flex items-center gap-2 px-3 py-2 cursor-pointer hover:bg-muted/50 transition-colors select-none",
+                        "group flex items-center gap-2 px-3 h-8 cursor-pointer hover:bg-muted/50 transition-colors select-none",
                         isSelected && "bg-primary/5",
                       )}
                       onClick={() => void selectScript(s.name)}
