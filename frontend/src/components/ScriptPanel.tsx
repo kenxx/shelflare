@@ -50,6 +50,7 @@ export function ScriptPanel({
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const [newKey, setNewKey] = useState("");
+  const [editKey, setEditKey] = useState("");
   const [keyError, setKeyError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -60,8 +61,10 @@ export function ScriptPanel({
       setKeyError(null);
       setSaveError(null);
     } else if (mode === "edit") {
+      setEditKey(selected?.key ?? "");
       setSaveError(null);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode]);
 
   useEffect(() => {
@@ -125,7 +128,17 @@ export function ScriptPanel({
         setKeyError(null);
         await onSave(k, content);
       } else if (mode === "edit" && selected) {
-        await onSave(selected.key, content);
+        const k = editKey.trim();
+        if (!k) {
+          setKeyError("名称不能为空");
+          return;
+        }
+        if (!KEY_RE.test(k)) {
+          setKeyError("只能包含字母、数字、连字符、下划线，且以字母或数字开头");
+          return;
+        }
+        setKeyError(null);
+        await onSave(k, content);
       }
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "保存失败");
@@ -151,7 +164,17 @@ export function ScriptPanel({
           }}
         />
       ) : (
-        <span className="font-mono text-sm font-medium">{selected?.key}</span>
+        <Input
+          value={editKey}
+          onChange={(e) => {
+            setEditKey(e.target.value);
+            setKeyError(null);
+          }}
+          className="h-7 text-sm font-mono w-48"
+          onKeyDown={(e) => {
+            if (e.key === "Enter") void handleSave();
+          }}
+        />
       )}
       {keyError && <span className="text-xs text-destructive">{keyError}</span>}
       {saveError && <span className="text-xs text-destructive">{saveError}</span>}

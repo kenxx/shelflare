@@ -191,9 +191,17 @@ export function Dashboard() {
       await api.createScript(key, content);
       await loadScripts();
       setSelected({ key, content });
-    } else {
-      await api.updateScript(key, content);
-      setSelected({ key, content });
+    } else if (selected) {
+      if (key !== selected.key) {
+        // 改名：创建新 key，删除旧 key
+        await api.createScript(key, content);
+        await api.deleteScript(selected.key);
+        await loadScripts();
+        setSelected({ key, content });
+      } else {
+        await api.updateScript(key, content);
+        setSelected({ key, content });
+      }
     }
     setMode("view");
   };
@@ -391,7 +399,7 @@ export function Dashboard() {
                       : "描述你需要的脚本，AI 可以帮你创建并保存..."
                   }
                   rows={1}
-                  className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-9 max-h-[100px] overflow-y-auto"
+                  className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-[7px] text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-9 max-h-[100px] overflow-y-auto"
                 />
                 <ThreadPrimitive.If running={false}>
                   <ComposerPrimitive.Send
