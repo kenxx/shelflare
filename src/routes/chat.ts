@@ -21,6 +21,16 @@ const SYSTEM_PROMPT =
 	"   #   ENV      - 运行环境（默认: production）\n" +
 	"2. 用 $\\{VAR:-default\\} 为参数设置默认值，不要假设变量一定存在\n" +
 	"3. 推荐 `set -euo pipefail`，注意安全性和健壮性\n\n" +
+	"【GitHub 代理】\n" +
+	"shelflare 内置了 GitHub 代理，路径为 `{origin}/_proxy/<url>`，仅允许以下域名：\n" +
+	"  raw.githubusercontent.com、github.com、api.github.com、objects.githubusercontent.com\n" +
+	"用途：脚本中需要从 GitHub 下载文件时（如 release 二进制、raw 脚本），用代理替换直连，" +
+	"解决用户网络无法访问 GitHub 的问题。\n" +
+	"示例：\n" +
+	"  原始：curl https://raw.githubusercontent.com/owner/repo/main/install.sh | sh\n" +
+	"  代理：curl {origin}/_proxy/https://raw.githubusercontent.com/owner/repo/main/install.sh | sh\n" +
+	"脚本内下载同理：将 wget/curl 的 GitHub URL 前加 `{origin}/_proxy/` 即可。\n" +
+	"当用户提到从 GitHub 下载、安装 release、或网络访问 GitHub 有问题时，主动使用代理 URL。\n\n" +
 	"其他注意事项：\n" +
 	"- 无论是否有当前脚本，用户都可以直接描述需求，你来创建并保存\n" +
 	"- 创建新脚本：直接调用 save_script，立即生效\n" +
