@@ -9,6 +9,8 @@ import {
   type TextMessagePartProps,
 } from "@assistant-ui/react";
 import { Loader2, Pencil, Plus, Send, Trash2 } from "lucide-react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { api, type ScriptKey } from "@/lib/api";
 import { type ScriptContext, createShelflareAdapter } from "@/lib/chatRuntime";
 import { type PanelMode, ScriptPanel } from "@/components/ScriptPanel";
@@ -29,30 +31,40 @@ import { cn } from "@/lib/utils";
 // --- Message rendering ---
 
 function MarkdownText({ text }: TextMessagePartProps) {
-  const parts = text.split(/(```[\s\S]*?```)/g);
   return (
-    <div>
-      {parts.map((part, i) => {
-        if (part.startsWith("```")) {
-          const inner = part.slice(3, -3);
-          const nl = inner.indexOf("\n");
-          const code = nl >= 0 ? inner.slice(nl + 1) : inner;
-          return (
-            <pre
-              key={i}
-              className="my-2 rounded-md bg-zinc-900 text-zinc-100 px-4 py-3 font-mono text-sm overflow-x-auto"
-            >
-              {code}
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm]}
+      components={{
+        p: ({ children }) => <p className="mb-2 last:mb-0">{children}</p>,
+        code: ({ className, children, ...props }) => {
+          const isBlock = className?.startsWith("language-");
+          return isBlock ? (
+            <pre className="my-2 rounded-md bg-zinc-900 text-zinc-100 px-4 py-3 font-mono text-sm overflow-x-auto">
+              <code>{children}</code>
             </pre>
+          ) : (
+            <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs" {...props}>
+              {children}
+            </code>
           );
-        }
-        return (
-          <span key={i} className="whitespace-pre-wrap">
-            {part}
-          </span>
-        );
-      })}
-    </div>
+        },
+        pre: ({ children }) => <>{children}</>,
+        ul: ({ children }) => <ul className="my-1 ml-4 list-disc space-y-0.5">{children}</ul>,
+        ol: ({ children }) => <ol className="my-1 ml-4 list-decimal space-y-0.5">{children}</ol>,
+        li: ({ children }) => <li className="text-sm">{children}</li>,
+        strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
+        a: ({ href, children }) => (
+          <a href={href} target="_blank" rel="noreferrer" className="underline underline-offset-2 hover:opacity-80">
+            {children}
+          </a>
+        ),
+        h1: ({ children }) => <h1 className="text-base font-bold mt-2 mb-1">{children}</h1>,
+        h2: ({ children }) => <h2 className="text-sm font-bold mt-2 mb-1">{children}</h2>,
+        h3: ({ children }) => <h3 className="text-sm font-semibold mt-1 mb-0.5">{children}</h3>,
+      }}
+    >
+      {text}
+    </ReactMarkdown>
   );
 }
 
