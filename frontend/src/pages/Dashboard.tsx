@@ -399,17 +399,17 @@ export function Dashboard() {
                       : "描述你需要的脚本，AI 可以帮你创建并保存..."
                   }
                   rows={1}
-                  className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-[7px] text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-9 max-h-[100px] overflow-y-auto"
+                  className="flex-1 resize-none rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-h-10 max-h-[100px] overflow-y-auto"
                 />
                 <ThreadPrimitive.If running={false}>
                   <ComposerPrimitive.Send
-                    className={cn(buttonVariants({ size: "icon" }), "shrink-0 h-9 w-9")}
+                    className={cn(buttonVariants({ size: "icon" }), "shrink-0 h-10 w-10")}
                   >
                     <Send className="h-4 w-4" />
                   </ComposerPrimitive.Send>
                 </ThreadPrimitive.If>
                 <ThreadPrimitive.If running>
-                  <div className={cn(buttonVariants({ size: "icon", variant: "outline" }), "shrink-0 h-9 w-9 pointer-events-none")}>
+                  <div className={cn(buttonVariants({ size: "icon", variant: "outline" }), "shrink-0 h-10 w-10 pointer-events-none")}>
                     <Loader2 className="h-4 w-4 animate-spin" />
                   </div>
                 </ThreadPrimitive.If>
