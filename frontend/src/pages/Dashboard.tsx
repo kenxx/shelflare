@@ -407,6 +407,12 @@ export function Dashboard() {
     try {
       const { content } = await api.getScript(key);
       setSelected({ key, content });
+      try {
+        const { content: unsavedContent } = await api.getUnsavedScript(key);
+        setPendingDiff({ old: content, new: unsavedContent });
+      } catch {
+        // 404 = no draft for this script
+      }
     } finally {
       setSelecting(null);
     }

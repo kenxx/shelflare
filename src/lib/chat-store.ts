@@ -19,6 +19,12 @@ function makeTitle(messages: UIMessage[]) {
 	return text.length > 36 ? `${text.slice(0, 36)}...` : text;
 }
 
+function makeStoredMessages(threadId: string, messages: UIMessage[]) {
+	return messages.map((message, index) => {
+		return { ...message, id: `${threadId}:${index}` };
+	});
+}
+
 export function chatStore(env: Bindings) {
 	return createChatStore(getDb(env.DB));
 }
@@ -102,30 +108,28 @@ export function createChatStore(db: AppDb) {
 			if (!thread || thread.archivedAt !== null) return null;
 			if (messages.length === 0) return thread;
 
+			const storedMessages = makeStoredMessages(threadId, messages);
 			const timestamp = now();
 			const title =
-				thread.title === "New chat" ? makeTitle(messages) : thread.title;
-			await db.transaction(async (tx) => {
-				await tx
-					.delete(chatMessages)
-					.where(eq(chatMessages.threadId, threadId));
-				if (messages.length > 0) {
-					await tx.insert(chatMessages).values(
-						messages.map((message, index) => ({
-							id: message.id,
-							threadId,
-							role: message.role,
-							partsJson: JSON.stringify(message.parts),
-							position: index,
-							createdAt: timestamp + index,
-						})),
-					);
-				}
-				await tx
-					.update(chatThreads)
-					.set({ title, updatedAt: timestamp })
-					.where(eq(chatThreads.id, threadId));
-			});
+				thread.title === "New chat" ? makeTitle(storedMessages) : thread.title;
+			await db.delete(chatMessages).where(eq(chatMessages.threadId, threadId));
+			for (const [index, message] of storedMessages.entries()) {
+				await db
+					.insert(chatMessages)
+					.values({
+						id: message.id,
+						threadId,
+						role: message.role,
+						partsJson: JSON.stringify(message.parts),
+						position: index,
+						createdAt: timestamp + index,
+					})
+					.onConflictDoNothing();
+			}
+			await db
+				.update(chatThreads)
+				.set({ title, updatedAt: timestamp })
+				.where(eq(chatThreads.id, threadId));
 			return { ...thread, title, updatedAt: timestamp };
 		},
 
@@ -158,13 +162,10 @@ export function createChatStore(db: AppDb) {
 			return this.getThread(userId, threadId);
 		},
 
-		async archiveThread(userId: string, threadId: string) {
+		async deleteThread(userId: string, threadId: string) {
 			const thread = await this.getThread(userId, threadId);
 			if (!thread) return null;
-			await db
-				.update(chatThreads)
-				.set({ archivedAt: now(), updatedAt: now() })
-				.where(eq(chatThreads.id, threadId));
+			await db.delete(chatThreads).where(eq(chatThreads.id, threadId));
 			return thread;
 		},
 	};

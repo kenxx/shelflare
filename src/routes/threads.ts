@@ -52,7 +52,7 @@ threads.put("/:id", async (c) => {
 });
 
 threads.delete("/:id", async (c) => {
-	const thread = await chatStore(c.env).archiveThread(
+	const thread = await chatStore(c.env).deleteThread(
 		c.get("user").id,
 		c.req.param("id"),
 	);
