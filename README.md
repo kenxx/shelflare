@@ -1,6 +1,6 @@
 # shelflare
 
-A shell script hosting platform built on Cloudflare Workers. Store scripts in KV and execute them anywhere with a single `curl` command.
+A shell script hosting platform built on Cloudflare Workers. Store script metadata and chat history in D1, script bodies in R2, and execute scripts anywhere with a single `curl` command.
 
 ```bash
 curl https://your-worker.workers.dev/install | sh
@@ -36,24 +36,25 @@ cd shelflare
 pnpm install
 ```
 
-### 3. Create a KV namespace
+### 3. Create D1 and R2 storage
 
 ```bash
-wrangler kv namespace create SCRIPTS
-# copy the returned id into wrangler.jsonc → kv_namespaces[0].id
+wrangler d1 create shelflare-db
+# optional: copy the returned database_id into wrangler.jsonc → d1_databases[0].database_id
 
-wrangler kv namespace create SCRIPTS --preview
-# copy the returned id into wrangler.jsonc → kv_namespaces[0].preview_id
+wrangler r2 bucket create shelflare-scripts
+
+pnpm db:migrate:remote
 ```
 
 ### 4. Set secrets
 
 ```bash
-wrangler secret put ADMIN_PASSWORD    # dashboard login password
+wrangler secret put JWT_SECRET        # random JWT signing secret
 wrangler secret put DEEPSEEK_API_KEY  # from platform.deepseek.com
 ```
 
-`ADMIN_USERNAME` defaults to `admin` and can be overridden in `wrangler.jsonc` under `vars`.
+When the users table is empty, the first successful dashboard login creates the first admin user with the submitted username and password. Further users are managed from the dashboard.
 
 ### 5. Deploy
 
@@ -110,7 +111,7 @@ Variable names must be valid shell identifiers (letters/underscore first, then l
 
 ### Dashboard
 
-Visit `/_dash` in a browser to manage scripts. Log in with `ADMIN_USERNAME` / `ADMIN_PASSWORD`.
+Visit `/_dash` in a browser to manage scripts. On an empty database, the first login creates the first admin user.
 
 **Script list (left panel)**
 - Click a script to select and preview it
@@ -126,21 +127,28 @@ Visit `/_dash` in a browser to manage scripts. Log in with `ADMIN_USERNAME` / `A
 **AI chat (right panel)**
 - Chat freely — no script selection required
 - Ask the AI to create scripts from scratch or modify the currently selected one
-- AI edits on an existing script are saved as a draft (`unsaved:<key>`) until accepted
+- AI edits on an existing script are saved as a D1 draft until accepted
+- Chat threads and messages are persisted in D1
 
 ## Project structure
 
 ```
 src/
+  db/
+    schema.ts       # Drizzle schema for D1
   index.ts          # Hono app entry, mounts routes
   routes/
-    api.ts          # REST API: auth, scripts CRUD, unsaved drafts
-    chat.ts         # AI chat: streaming + tool calling (DeepSeek)
+    api.ts          # REST API: auth, scripts CRUD, drafts
+    chat.ts         # AI chat: AI SDK streaming + tool calling
+    threads.ts      # Chat thread APIs
+    users.ts        # Admin user management APIs
     serve.ts        # Script serving with querystring injection
     proxy.ts        # URL proxy (/_proxy/:url)
   lib/
-    kv.ts           # KV helpers with index tracking
     jwt.ts          # HS256 JWT sign/verify
+    password.ts     # PBKDF2 password hashing
+    scripts-store.ts # D1 metadata + R2 script content helper
+    chat-store.ts   # D1 chat persistence helper
   middleware.ts     # requireAuth middleware
   types.ts          # Cloudflare bindings type
 
@@ -154,7 +162,6 @@ frontend/           # React + Vite + Tailwind + shadcn/ui
       ScriptPanel.tsx   # CodeMirror editor + MergeView diff
     lib/
       api.ts            # Typed fetch wrapper
-      chatRuntime.ts    # assistant-ui adapter (SSE streaming)
 ```
 
 ## API reference
@@ -166,6 +173,9 @@ All endpoints under `/_api/` require `Authorization: Bearer <token>` except `/lo
 | `POST` | `/_api/login` | Get JWT token |
 | `POST` | `/_api/logout` | Invalidate session (client-side) |
 | `GET` | `/_api/me` | Check auth status |
+| `GET` | `/_api/users` | List users (admin only) |
+| `POST` | `/_api/users` | Create user (admin only) |
+| `PUT` | `/_api/users/:id` | Update user (admin only) |
 | `GET` | `/_api/scripts` | List all script keys |
 | `GET` | `/_api/scripts/:key` | Get script content |
 | `POST` | `/_api/scripts` | Create new script |
@@ -173,6 +183,11 @@ All endpoints under `/_api/` require `Authorization: Bearer <token>` except `/lo
 | `DELETE` | `/_api/scripts/:key` | Delete script |
 | `GET` | `/_api/unsaved/:key` | Get AI draft (pending review) |
 | `DELETE` | `/_api/unsaved/:key` | Discard AI draft |
+| `GET` | `/_api/threads` | List chat threads |
+| `POST` | `/_api/threads` | Create chat thread |
+| `GET` | `/_api/threads/:id/messages` | Get thread messages |
+| `PUT` | `/_api/threads/:id` | Update thread metadata |
+| `DELETE` | `/_api/threads/:id` | Archive thread |
 | `POST` | `/_api/chat` | AI chat (SSE stream) |
 
 ### `POST /_api/chat`

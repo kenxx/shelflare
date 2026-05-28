@@ -30,8 +30,29 @@ export interface ListResponse {
   list_complete: boolean;
 }
 
+export interface CurrentUser {
+  id: string;
+  username: string;
+  role: "admin" | "user";
+}
+
+export interface UserRecord extends CurrentUser {
+  disabledAt: number | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ChatThread {
+  id: string;
+  title: string;
+  scriptId: string | null;
+  scriptKey: string | null;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export const api = {
-  login: async (username: string, password: string): Promise<void> => {
+  login: async (username: string, password: string): Promise<CurrentUser> => {
     const res = await fetch(`${BASE}/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -41,8 +62,9 @@ export const api = {
       const err = await res.json().catch(() => ({ error: res.statusText }));
       throw new Error((err as { error: string }).error ?? res.statusText);
     }
-    const { token } = (await res.json()) as { token: string };
+    const { token, user } = (await res.json()) as { token: string; user: CurrentUser };
     localStorage.setItem("token", token);
+    return user;
   },
 
   logout: (): void => {
@@ -50,7 +72,25 @@ export const api = {
     fetch(`${BASE}/logout`, { method: "POST" }).catch(() => {});
   },
 
-  me: () => apiFetch("/me").then((r) => r.json() as Promise<{ ok: boolean }>),
+  me: () => apiFetch("/me").then((r) => r.json() as Promise<{ ok: boolean; user: CurrentUser }>),
+
+  listUsers: () =>
+    apiFetch("/users").then((r) => r.json() as Promise<{ users: UserRecord[] }>),
+
+  createUser: (input: { username: string; password: string; role: CurrentUser["role"] }) =>
+    apiFetch("/users", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }).then((r) => r.json() as Promise<{ user: UserRecord }>),
+
+  updateUser: (
+    id: string,
+    input: Partial<{ username: string; password: string; role: CurrentUser["role"]; disabled: boolean }>,
+  ) =>
+    apiFetch(`/users/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    }).then((r) => r.json() as Promise<{ user: UserRecord | null }>),
 
   listScripts: () =>
     apiFetch("/scripts").then((r) => r.json() as Promise<ListResponse>),
@@ -84,6 +124,31 @@ export const api = {
 
   deleteUnsavedScript: (key: string) =>
     apiFetch(`/unsaved/${encodeURIComponent(key)}`, { method: "DELETE" }).then(
+      (r) => r.json(),
+    ),
+
+  listThreads: () =>
+    apiFetch("/threads").then((r) => r.json() as Promise<{ threads: ChatThread[] }>),
+
+  createThread: (scriptKey?: string | null) =>
+    apiFetch("/threads", {
+      method: "POST",
+      body: JSON.stringify({ scriptKey }),
+    }).then((r) => r.json() as Promise<{ thread: ChatThread }>),
+
+  getThreadMessages: (id: string) =>
+    apiFetch(`/threads/${encodeURIComponent(id)}/messages`).then(
+      (r) => r.json() as Promise<{ messages: unknown[] }>,
+    ),
+
+  updateThread: (id: string, input: Partial<{ title: string; scriptKey: string | null }>) =>
+    apiFetch(`/threads/${encodeURIComponent(id)}`, {
+      method: "PUT",
+      body: JSON.stringify(input),
+    }).then((r) => r.json() as Promise<{ thread: ChatThread }>),
+
+  deleteThread: (id: string) =>
+    apiFetch(`/threads/${encodeURIComponent(id)}`, { method: "DELETE" }).then(
       (r) => r.json(),
     ),
 };

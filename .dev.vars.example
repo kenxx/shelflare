@@ -1,2 +1,5 @@
-ADMIN_PASSWORD=     # Dashboard login password
-DEEPSEEK_API_KEY=   # API key from platform.deepseek.com
+# JWT signing secret for dashboard sessions. Use a long random value.
+JWT_SECRET=
+
+# API key from platform.deepseek.com
+DEEPSEEK_API_KEY=

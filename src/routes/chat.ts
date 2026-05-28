@@ -1,10 +1,18 @@
+import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
+import {
+	convertToModelMessages,
+	stepCountIs,
+	streamText,
+	tool,
+	type UIMessage,
+	zodSchema,
+} from "ai";
 import { Hono } from "hono";
-import { scripts } from "../lib/kv";
+import { z } from "zod";
+import { chatStore } from "../lib/chat-store";
+import { KEY_RE, scriptStore } from "../lib/scripts-store";
 import { requireAuth } from "../middleware";
-import type { Bindings } from "../types";
-
-const KEY_RE = /^[a-zA-Z0-9][a-zA-Z0-9_-]*$/;
-const DEEPSEEK_URL = "https://api.deepseek.com/v1/chat/completions";
+import type { AppEnv } from "../types";
 
 const SYSTEM_PROMPT =
 	"你是 shelflare 的 AI 助手。shelflare 是一个基于 Cloudflare Workers 的 shell 脚本托管平台，" +
@@ -32,242 +40,203 @@ const SYSTEM_PROMPT =
 	"脚本内下载同理：将 wget/curl 的 GitHub URL 前加 `{origin}/_proxy/` 即可。\n" +
 	"当用户提到从 GitHub 下载、安装 release、或网络访问 GitHub 有问题时，主动使用代理 URL。\n\n" +
 	"其他注意事项：\n" +
-	"- 无论是否有当前脚本，用户都可以直接描述需求，你来创建并保存\n" +
-	"- 创建新脚本：直接调用 save_script，立即生效\n" +
-	"- 修改已有脚本（上下文中有当前脚本）：save_script 会保存为草稿，用户 Accept 后才生效\n" +
-	"- 当用户要求修改或保存脚本时，主动调用 save_script 工具，不要等用户再次确认\n" +
+	"- 用户说“写一个脚本”“创建一个脚本”“做一个安装脚本”等，默认是在新建脚本；生成完整脚本后直接调用 new_script 保存，不要只把脚本发在聊天里\n" +
+	"- 新建脚本：调用 new_script，立即生效；new_script 只用于创建新 key，不能覆盖已有脚本\n" +
+	"- 修改已有脚本：只有当用户明确指定脚本 key，或当前上下文中有正在编辑的脚本时，才调用 update_script\n" +
+	"- 修改当前上下文脚本时，update_script 会保存为草稿，用户 Accept 后才生效\n" +
+	"- 当用户要求修改但没有明确目标脚本，也没有当前上下文脚本时，先询问要修改哪个 key，不要新建脚本代替\n" +
 	"- key 只能包含字母、数字、连字符和下划线，以字母或数字开头\n" +
 	"- 保存后告知用户执行命令，格式为 `curl {origin}/{key} | sh`\n" +
 	"- 回答简洁，脚本用代码块包裹";
 
-const TOOLS = [
-	{
-		type: "function",
-		function: {
-			name: "save_script",
-			description:
-				"Save or update a shell script. Call this when the user asks to save, create, or update a script.",
-			parameters: {
-				type: "object",
-				properties: {
-					key: {
-						type: "string",
-						description:
-							"Script name (alphanumeric, hyphens, underscores, no leading underscore)",
-					},
-					content: { type: "string", description: "Full shell script content" },
-				},
-				required: ["key", "content"],
-			},
-		},
-	},
-	{
-		type: "function",
-		function: {
-			name: "read_script",
-			description: "Read the content of an existing script by key.",
-			parameters: {
-				type: "object",
-				properties: { key: { type: "string" } },
-				required: ["key"],
-			},
-		},
-	},
-	{
-		type: "function",
-		function: {
-			name: "list_scripts",
-			description: "List all saved script names.",
-			parameters: { type: "object", properties: {} },
-		},
-	},
-];
-
-type ToolCall = {
-	index: number;
-	id?: string;
-	function?: { name?: string; arguments?: string };
+type ScriptContext = {
+	key: string;
+	content: string;
 };
 
-const chat = new Hono<{ Bindings: Bindings }>();
+function mergeWithPersistedMessages(
+	persistedMessages: UIMessage[],
+	requestMessages: UIMessage[],
+) {
+	if (persistedMessages.length === 0) return requestMessages;
+	if (requestMessages.length === 0) return persistedMessages;
+
+	const persistedIds = new Set(persistedMessages.map((message) => message.id));
+	const hasPersistedMessage = requestMessages.some((message) =>
+		persistedIds.has(message.id),
+	);
+
+	if (!hasPersistedMessage) {
+		return [...persistedMessages, ...requestMessages];
+	}
+
+	return [
+		...persistedMessages.map(
+			(message) =>
+				requestMessages.find(
+					(requestMessage) => requestMessage.id === message.id,
+				) ?? message,
+		),
+		...requestMessages.filter((message) => !persistedIds.has(message.id)),
+	];
+}
+
+const chat = new Hono<AppEnv>();
 
 chat.post("/", requireAuth, async (c) => {
-	const { messages, context } = await c.req.json<{
-		messages: { role: string; content: string }[];
-		context?: { key: string; content: string };
-	}>();
+	const {
+		messages,
+		context,
+		threadId,
+		system,
+	}: {
+		messages: UIMessage[];
+		context?: ScriptContext | null;
+		threadId?: string;
+		system?: string;
+	} = await c.req.json();
 
-	const kv = scripts(c.env.SCRIPTS);
+	const currentUser = c.get("user");
+	let promptMessages = messages;
+	if (threadId) {
+		const persistedMessages = await chatStore(c.env).getMessages(
+			currentUser.id,
+			threadId,
+		);
+		if (!persistedMessages) return c.json({ error: "Thread not found" }, 404);
+		promptMessages = mergeWithPersistedMessages(persistedMessages, messages);
+	}
+
+	const store = scriptStore(c.env);
 	const origin = new URL(c.req.url).origin;
+	const deepseek = createOpenAICompatible({
+		name: "deepseek",
+		apiKey: c.env.DEEPSEEK_API_KEY,
+		baseURL: "https://api.deepseek.com/v1",
+	});
 
 	let sysPrompt = SYSTEM_PROMPT.replaceAll("{origin}", origin);
+	if (system) sysPrompt += `\n\n${system}`;
 	if (context) {
 		sysPrompt += `\n\n[当前编辑脚本: ${context.key}]\n执行命令: curl ${origin}/${context.key} | sh\n\`\`\`bash\n${context.content}\n\`\`\``;
 	}
 
-	const history: object[] = [
-		{ role: "system", content: sysPrompt },
-		...messages,
-	];
-	const apiKey = c.env.DEEPSEEK_API_KEY;
-
-	const { readable, writable } = new TransformStream<Uint8Array, Uint8Array>();
-	const writer = writable.getWriter();
-	const enc = new TextEncoder();
-	const dec = new TextDecoder();
-
-	const run = async () => {
-		try {
-			const upstream = await fetch(DEEPSEEK_URL, {
-				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-					Authorization: `Bearer ${apiKey}`,
-				},
-				body: JSON.stringify({
-					model: "deepseek-chat",
-					messages: history,
-					tools: TOOLS,
-					stream: true,
+	const tools = {
+		new_script: tool({
+			description:
+				"Create and save a new shell script. Use this when the user asks to write, create, or save a new script. Do not use it to update an existing script.",
+			inputSchema: zodSchema(
+				z.object({
+					key: z
+						.string()
+						.describe(
+							"Script name: letters, numbers, hyphens, and underscores; must start with a letter or number.",
+						),
+					content: z.string().describe("Full shell script content."),
 				}),
-			});
+			),
+			execute: async ({ key, content }) => {
+				if (!KEY_RE.test(key)) {
+					return { ok: false, error: `Invalid script key: ${key}` };
+				}
 
-			const reader = (upstream.body ?? new ReadableStream()).getReader();
-			const toolCallsMap = new Map<
-				number,
-				{ id: string; name: string; args: string }
-			>();
-			let hasToolCalls = false;
-			let buf = "";
-
-			outer: while (true) {
-				const { done, value } = await reader.read();
-				if (done) break;
-
-				buf += dec.decode(value, { stream: true });
-				const lines = buf.split("\n");
-				buf = lines.pop() ?? "";
-
-				for (const line of lines) {
-					if (!line.startsWith("data: ")) continue;
-					const data = line.slice(6).trim();
-					if (data === "[DONE]") break outer;
-
-					let parsed: {
-						choices?: {
-							delta?: { content?: string; tool_calls?: ToolCall[] };
-						}[];
+				if (await store.getByKey(key)) {
+					return {
+						ok: false,
+						error: `Script "${key}" already exists. Use update_script to modify it.`,
 					};
-					try {
-						parsed = JSON.parse(data);
-					} catch {
-						continue;
-					}
-
-					const delta = parsed.choices?.[0]?.delta;
-					if (!delta) continue;
-
-					if (delta.tool_calls) {
-						hasToolCalls = true;
-						for (const tc of delta.tool_calls) {
-							const existing = toolCallsMap.get(tc.index);
-							if (tc.id) {
-								toolCallsMap.set(tc.index, {
-									id: tc.id,
-									name: tc.function?.name ?? "",
-									args: tc.function?.arguments ?? "",
-								});
-							} else if (existing) {
-								existing.args += tc.function?.arguments ?? "";
-								if (tc.function?.name) existing.name = tc.function.name;
-							}
-						}
-					} else if (delta.content && !hasToolCalls) {
-						await writer.write(enc.encode(`data: ${data}\n\n`));
-					}
-				}
-			}
-
-			if (hasToolCalls && toolCallsMap.size > 0) {
-				history.push({
-					role: "assistant",
-					content: null,
-					tool_calls: [...toolCallsMap.values()].map((tc) => ({
-						id: tc.id,
-						type: "function",
-						function: { name: tc.name, arguments: tc.args },
-					})),
-				});
-
-				for (const tc of toolCallsMap.values()) {
-					let result: string;
-					try {
-						const args = JSON.parse(tc.args) as Record<string, string>;
-						if (tc.name === "save_script") {
-							if (!KEY_RE.test(args.key ?? "")) {
-								result = `Error: invalid key "${args.key}"`;
-							} else if (context?.key === args.key) {
-								await c.env.SCRIPTS.put(
-									`unsaved:${args.key}`,
-									args.content ?? "",
-								);
-								result = `Saved draft for "${args.key}". The user will review and accept or reject the change.`;
-							} else {
-								await kv.put(args.key, args.content ?? "");
-								result = `Saved script "${args.key}" successfully.`;
-							}
-						} else if (tc.name === "read_script") {
-							const content = await kv.get(args.key ?? "");
-							result = content ?? `Script "${args.key}" not found.`;
-						} else if (tc.name === "list_scripts") {
-							const list = await kv.list();
-							result = list.keys.length
-								? list.keys.map((k) => k.name).join(", ")
-								: "No scripts saved yet.";
-						} else {
-							result = `Unknown tool: ${tc.name}`;
-						}
-					} catch {
-						result = "Tool execution error.";
-					}
-					history.push({ role: "tool", tool_call_id: tc.id, content: result });
 				}
 
-				const finalUpstream = await fetch(DEEPSEEK_URL, {
-					method: "POST",
-					headers: {
-						"Content-Type": "application/json",
-						Authorization: `Bearer ${apiKey}`,
-					},
-					body: JSON.stringify({
-						model: "deepseek-chat",
-						messages: history,
-						stream: true,
-					}),
-				});
-
-				const finalReader = (
-					finalUpstream.body ?? new ReadableStream()
-				).getReader();
-				while (true) {
-					const { done, value } = await finalReader.read();
-					if (done) break;
-					await writer.write(value);
+				await store.create(key, content, currentUser.id);
+				return {
+					ok: true,
+					key,
+					status: "created",
+					command: `curl ${origin}/${key} | sh`,
+				};
+			},
+		}),
+		update_script: tool({
+			description:
+				"Update an existing shell script. Use this only when the user explicitly names an existing script key, or when editing the current script from context.",
+			inputSchema: zodSchema(
+				z.object({
+					key: z
+						.string()
+						.describe(
+							"Existing script key to update: letters, numbers, hyphens, and underscores; must start with a letter or number.",
+						),
+					content: z
+						.string()
+						.describe("Full replacement shell script content."),
+				}),
+			),
+			execute: async ({ key, content }) => {
+				if (!KEY_RE.test(key)) {
+					return { ok: false, error: `Invalid script key: ${key}` };
 				}
-			} else {
-				await writer.write(enc.encode("data: [DONE]\n\n"));
-			}
-		} finally {
-			await writer.close().catch(() => {});
-		}
+
+				if (context?.key === key) {
+					const draft = await store.upsertDraft(key, currentUser.id, content);
+					if (!draft) return { ok: false, error: `Script "${key}" not found.` };
+					return {
+						ok: true,
+						key,
+						status: "draft",
+						message:
+							"Saved a draft for the current script. The user will review and accept or reject the change.",
+					};
+				}
+
+				const updated = await store.update(key, content);
+				if (!updated) return { ok: false, error: `Script "${key}" not found.` };
+				return {
+					ok: true,
+					key,
+					status: "updated",
+					command: `curl ${origin}/${key} | sh`,
+				};
+			},
+		}),
+		read_script: tool({
+			description: "Read the content of an existing saved script by key.",
+			inputSchema: zodSchema(z.object({ key: z.string() })),
+			execute: async ({ key }) => {
+				const result = await store.getContent(key);
+				if (!result || "missingObject" in result) {
+					return { ok: false, error: `Script "${key}" not found.` };
+				}
+				return { ok: true, key, content: result.content };
+			},
+		}),
+		list_scripts: tool({
+			description: "List all saved script names.",
+			inputSchema: zodSchema(z.object({})),
+			execute: async () => {
+				const list = await store.list();
+				return { ok: true, scripts: list.keys.map((key) => key.name) };
+			},
+		}),
 	};
 
-	c.executionCtx.waitUntil(run());
+	const result = streamText({
+		model: deepseek("deepseek-chat"),
+		system: sysPrompt,
+		messages: await convertToModelMessages(promptMessages),
+		tools,
+		stopWhen: stepCountIs(5),
+	});
 
-	return new Response(readable, {
-		headers: {
-			"Content-Type": "text/event-stream",
-			"Cache-Control": "no-store",
+	return result.toUIMessageStreamResponse({
+		headers: { "Cache-Control": "no-store" },
+		originalMessages: promptMessages,
+		onFinish: async ({ messages: updatedMessages }) => {
+			if (!threadId) return;
+			await chatStore(c.env).replaceMessages(
+				currentUser.id,
+				threadId,
+				updatedMessages,
+			);
 		},
 	});
 });

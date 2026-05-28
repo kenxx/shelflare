@@ -5,6 +5,18 @@ import { StreamLanguage } from "@codemirror/language";
 import { shell } from "@codemirror/legacy-modes/mode/shell";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { MergeView } from "@codemirror/merge";
+import { Check, Copy } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -37,6 +49,28 @@ const editorTheme = EditorView.theme({
   ".cm-mergeViewEditors": { height: "100%" },
 });
 
+function getRunCommand(key: string) {
+  const origin = typeof window === "undefined" ? "" : window.location.origin;
+  return `curl ${origin}/${encodeURIComponent(key)} | sh`;
+}
+
+async function copyText(text: string) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.top = "-9999px";
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand("copy");
+  textarea.remove();
+}
+
 export function ScriptPanel({
   selected,
   pendingDiff,
@@ -54,18 +88,23 @@ export function ScriptPanel({
   const [keyError, setKeyError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [copiedScriptKey, setCopiedScriptKey] = useState<string | null>(null);
+  const [copyError, setCopyError] = useState<string | null>(null);
+  const [copyDialogOpen, setCopyDialogOpen] = useState(false);
 
   useEffect(() => {
-    if (mode === "new") {
-      setNewKey("");
-      setKeyError(null);
-      setSaveError(null);
-    } else if (mode === "edit") {
-      setEditKey(selected?.key ?? "");
-      setSaveError(null);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode]);
+    queueMicrotask(() => {
+      if (mode === "new") {
+        setNewKey("");
+        setKeyError(null);
+        setSaveError(null);
+      } else if (mode === "edit") {
+        setEditKey(selected?.key ?? "");
+        setKeyError(null);
+        setSaveError(null);
+      }
+    });
+  }, [mode, selected?.key]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -147,6 +186,21 @@ export function ScriptPanel({
     }
   };
 
+  const handleCopyRunCommand = async () => {
+    if (!selected) return;
+    try {
+      await copyText(getRunCommand(selected.key));
+      setCopyError(null);
+      setCopiedScriptKey(selected.key);
+      setCopyDialogOpen(false);
+      window.setTimeout(() => {
+        setCopiedScriptKey((key) => (key === selected.key ? null : key));
+      }, 1600);
+    } catch {
+      setCopyError("复制失败，请手动复制命令");
+    }
+  };
+
   const topBar = (
     <div className="flex items-center gap-2 px-4 h-10 border-b shrink-0">
       {mode === "new" ? (
@@ -198,7 +252,7 @@ export function ScriptPanel({
     return (
       <div className="flex-1 flex flex-col overflow-hidden border-r">
         {topBar}
-        <div ref={containerRef} className="flex-1 overflow-hidden" />
+        <div ref={containerRef} className="min-h-0 flex-1 overflow-hidden" />
       </div>
     );
   }
@@ -215,12 +269,15 @@ export function ScriptPanel({
     return (
       <div className="flex-1 flex flex-col overflow-hidden border-r">
         {topBar}
-        <div ref={containerRef} className="flex-1 overflow-hidden" />
+        <div ref={containerRef} className="min-h-0 flex-1 overflow-hidden" />
       </div>
     );
   }
 
   // view mode
+  const runCommand = getRunCommand(selected.key);
+  const copyButtonLabel = copiedScriptKey === selected.key ? "已复制" : "复制命令";
+
   return (
     <div className="flex-1 flex flex-col overflow-hidden border-r">
       <div className="flex items-center justify-between px-4 h-10 border-b shrink-0">
@@ -242,8 +299,47 @@ export function ScriptPanel({
             </span>
           )}
         </div>
-        {pendingDiff && (
-          <div className="flex gap-1.5">
+        <div className="flex gap-1.5">
+          <AlertDialog open={copyDialogOpen} onOpenChange={setCopyDialogOpen}>
+            <AlertDialogTrigger
+              className={cn(
+                "h-7 text-xs",
+                copiedScriptKey === selected.key && "text-emerald-600",
+              )}
+              render={
+                <Button size="sm" variant="outline">
+                  {copiedScriptKey === selected.key ? (
+                    <Check className="size-3.5" />
+                  ) : (
+                    <Copy className="size-3.5" />
+                  )}
+                  {copyButtonLabel}
+                </Button>
+              }
+              onClick={() => setCopyError(null)}
+            />
+            <AlertDialogContent className="sm:max-w-lg">
+              <AlertDialogHeader>
+                <AlertDialogTitle>确认执行脚本</AlertDialogTitle>
+                <AlertDialogDescription>
+                  确认要复制脚本 <span className="font-mono font-medium text-foreground">{selected.key}</span> 的执行命令。
+                  {pendingDiff ? " 当前还有未接受的 AI 草稿，复制的命令会运行已保存版本。" : ""}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <div className="rounded-md border bg-muted px-3 py-2 font-mono text-xs text-foreground break-all">
+                {runCommand}
+              </div>
+              {copyError && <p className="text-xs text-destructive">{copyError}</p>}
+              <AlertDialogFooter>
+                <AlertDialogCancel>取消</AlertDialogCancel>
+                <AlertDialogAction onClick={() => void handleCopyRunCommand()}>
+                  复制命令
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          {pendingDiff && (
+            <>
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => void onAccept()}>
               Accept
             </Button>
@@ -255,10 +351,14 @@ export function ScriptPanel({
             >
               Reject
             </Button>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
-      <div ref={containerRef} className="flex-1 overflow-hidden" />
+      <div
+        ref={containerRef}
+        className={cn("min-h-0 flex-1 overflow-hidden", pendingDiff && "script-diff-host")}
+      />
     </div>
   );
 }

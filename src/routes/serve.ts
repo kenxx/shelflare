@@ -1,14 +1,16 @@
 import { Hono } from "hono";
-import { scripts } from "../lib/kv";
-import type { Bindings } from "../types";
+import { scriptStore } from "../lib/scripts-store";
+import type { AppEnv } from "../types";
 
-const serve = new Hono<{ Bindings: Bindings }>();
+const serve = new Hono<AppEnv>();
 
 serve.get("/:key", async (c, next) => {
 	const key = c.req.param("key") ?? "";
 
-	const content = await scripts(c.env.SCRIPTS).get(key);
-	if (content === null) return next();
+	const result = await scriptStore(c.env).getContent(key);
+	if (result === null) return next();
+	if ("missingObject" in result) return c.text("Script content missing", 500);
+	const { content } = result;
 
 	// 在 shebang 行之后注入 querystring 变量
 	const params = new URL(c.req.url).searchParams;
