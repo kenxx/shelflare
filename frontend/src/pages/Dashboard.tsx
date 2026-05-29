@@ -380,13 +380,9 @@ export function Dashboard() {
     async (contextBefore: ScriptContext | null) => {
       await Promise.all([loadScripts(), loadThreads()]);
       if (!contextBefore) return;
-      try {
-        const { content: unsavedContent } = await api.getUnsavedScript(contextBefore.key);
-        if (selected?.key === contextBefore.key) {
-          setPendingDiff({ old: contextBefore.content, new: unsavedContent });
-        }
-      } catch {
-        // 404 = AI 没有存草稿（如新建脚本），无需 diff
+      const { draftContent } = await api.getScript(contextBefore.key);
+      if (draftContent && selected?.key === contextBefore.key) {
+        setPendingDiff({ old: contextBefore.content, new: draftContent });
       }
     },
     [loadScripts, loadThreads, selected],
@@ -405,13 +401,10 @@ export function Dashboard() {
     setSelecting(key);
     setPendingDiff(null);
     try {
-      const { content } = await api.getScript(key);
+      const { content, draftContent } = await api.getScript(key);
       setSelected({ key, content });
-      try {
-        const { content: unsavedContent } = await api.getUnsavedScript(key);
-        setPendingDiff({ old: content, new: unsavedContent });
-      } catch {
-        // 404 = no draft for this script
+      if (draftContent) {
+        setPendingDiff({ old: content, new: draftContent });
       }
     } finally {
       setSelecting(null);

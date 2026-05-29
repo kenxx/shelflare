@@ -20,9 +20,7 @@ export const users = sqliteTable(
 		createdAt: integer("created_at").notNull(),
 		updatedAt: integer("updated_at").notNull(),
 	},
-	(table) => ({
-		usernameIdx: uniqueIndex("users_username_idx").on(table.username),
-	}),
+	(table) => [uniqueIndex("users_username_idx").on(table.username)],
 );
 
 export const scripts = sqliteTable(
@@ -39,10 +37,10 @@ export const scripts = sqliteTable(
 		createdAt: integer("created_at").notNull(),
 		updatedAt: integer("updated_at").notNull(),
 	},
-	(table) => ({
-		keyIdx: uniqueIndex("scripts_key_idx").on(table.key),
-		ownerIdx: index("scripts_owner_idx").on(table.ownerId),
-	}),
+	(table) => [
+		uniqueIndex("scripts_key_idx").on(table.key),
+		index("scripts_owner_idx").on(table.ownerId),
+	],
 );
 
 export const scriptDrafts = sqliteTable(
@@ -60,13 +58,13 @@ export const scriptDrafts = sqliteTable(
 		createdAt: integer("created_at").notNull(),
 		updatedAt: integer("updated_at").notNull(),
 	},
-	(table) => ({
-		scriptUserIdx: uniqueIndex("script_drafts_script_user_idx").on(
+	(table) => [
+		uniqueIndex("script_drafts_script_user_idx").on(
 			table.scriptId,
 			table.userId,
 		),
-		userIdx: index("script_drafts_user_idx").on(table.userId),
-	}),
+		index("script_drafts_user_idx").on(table.userId),
+	],
 );
 
 export const chatThreads = sqliteTable(
@@ -84,13 +82,13 @@ export const chatThreads = sqliteTable(
 		updatedAt: integer("updated_at").notNull(),
 		archivedAt: integer("archived_at"),
 	},
-	(table) => ({
-		userUpdatedIdx: index("chat_threads_user_updated_idx").on(
+	(table) => [
+		index("chat_threads_user_updated_idx").on(
 			table.userId,
 			table.updatedAt,
 		),
-		scriptIdx: index("chat_threads_script_idx").on(table.scriptId),
-	}),
+		index("chat_threads_script_idx").on(table.scriptId),
+	],
 );
 
 export const chatMessages = sqliteTable(
@@ -105,13 +103,13 @@ export const chatMessages = sqliteTable(
 		position: integer("position").notNull(),
 		createdAt: integer("created_at").notNull(),
 	},
-	(table) => ({
-		threadPositionIdx: uniqueIndex("chat_messages_thread_position_idx").on(
+	(table) => [
+		uniqueIndex("chat_messages_thread_position_idx").on(
 			table.threadId,
 			table.position,
 		),
-		threadIdx: index("chat_messages_thread_idx").on(table.threadId),
-	}),
+		index("chat_messages_thread_idx").on(table.threadId),
+	],
 );
 
 export const usersRelations = relations(users, ({ many }) => ({

@@ -5,7 +5,7 @@ import {
 	streamText,
 	type UIMessage,
 } from "ai";
-import type { AuthUser, Bindings } from "../../types";
+import type { AuthUser, Bindings } from "../types";
 import { buildSystemPrompt, type ScriptContext } from "./prompt";
 import { createScriptTools } from "./script-tools";
 

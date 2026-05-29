@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { scriptStore } from "../lib/scripts-store";
+import { scriptStore } from "../scripts/store";
 import type { AppEnv } from "../types";
 
 const serve = new Hono<AppEnv>();

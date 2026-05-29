@@ -2,7 +2,7 @@ import { asc, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { getDb } from "../db";
 import { type UserRole, users } from "../db/schema";
-import { hashPassword } from "../lib/password";
+import { hashPassword } from "../auth/password";
 import { requireAdmin, requireAuth } from "../middleware";
 import type { AppEnv } from "../types";
 

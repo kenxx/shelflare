@@ -97,7 +97,7 @@ export const api = {
 
   getScript: (key: string) =>
     apiFetch(`/scripts/${encodeURIComponent(key)}`).then(
-      (r) => r.json() as Promise<{ key: string; content: string }>
+      (r) => r.json() as Promise<{ key: string; content: string; draftContent: string | null }>
     ),
 
   createScript: (key: string, content: string) =>
@@ -116,11 +116,6 @@ export const api = {
     apiFetch(`/scripts/${encodeURIComponent(key)}`, {
       method: "DELETE",
     }).then((r) => r.json()),
-
-  getUnsavedScript: (key: string) =>
-    apiFetch(`/unsaved/${encodeURIComponent(key)}`).then(
-      (r) => r.json() as Promise<{ key: string; content: string }>,
-    ),
 
   deleteUnsavedScript: (key: string) =>
     apiFetch(`/unsaved/${encodeURIComponent(key)}`, { method: "DELETE" }).then(

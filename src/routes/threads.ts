@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { chatStore } from "../lib/chat-store";
+import { chatStore } from "../chat/store";
 import { requireAuth } from "../middleware";
 import type { AppEnv } from "../types";
 

@@ -2,9 +2,9 @@ import { count, eq } from "drizzle-orm";
 import { Hono } from "hono";
 import { getDb } from "../db";
 import { users } from "../db/schema";
-import { signJwt } from "../lib/jwt";
-import { hashPassword, verifyPassword } from "../lib/password";
-import { KEY_RE, scriptStore } from "../lib/scripts-store";
+import { signJwt } from "../auth/jwt";
+import { hashPassword, verifyPassword } from "../auth/password";
+import { KEY_RE, scriptStore } from "../scripts/store";
 import { requireAuth } from "../middleware";
 import type { AppEnv } from "../types";
 import chat from "./chat";
@@ -85,12 +85,18 @@ api.get("/scripts", requireAuth, async (c) => {
 // 获取单个脚本
 api.get("/scripts/:key", requireAuth, async (c) => {
 	const key = c.req.param("key") ?? "";
-	const result = await scriptStore(c.env).getContent(key);
+	const store = scriptStore(c.env);
+	const result = await store.getContent(key);
 	if (result === null) return c.json({ error: "Script not found" }, 404);
 	if ("missingObject" in result) {
 		return c.json({ error: "Script content missing from R2" }, 500);
 	}
-	return c.json({ key: result.key, content: result.content });
+	const draft = await store.getDraft(key, c.get("user").id);
+	return c.json({
+		key: result.key,
+		content: result.content,
+		draftContent: draft?.draftContent ?? null,
+	});
 });
 
 // 创建脚本

@@ -1,9 +1,25 @@
 import { tool, zodSchema } from "ai";
 import { z } from "zod";
-import type { AuthUser, Bindings } from "../../types";
-import { KEY_RE, scriptStore } from "../scripts-store";
-import { applyUnifiedDiff } from "../unified-diff";
+import type { AuthUser, Bindings } from "../types";
+import { KEY_RE, scriptStore } from "../scripts/store";
+import { applyUnifiedDiff } from "../utils/unified-diff";
 import { countOccurrences, replaceExact } from "./text-edit";
+
+function formatWithLineNumbers(
+	content: string,
+	startLine = 1,
+	endLine?: number,
+): { content: string; totalLines: number; startLine: number; endLine: number } {
+	const lines = content.split("\n");
+	const total = lines.length;
+	const from = Math.max(1, startLine);
+	const to = Math.min(total, endLine ?? total);
+	const slice = lines.slice(from - 1, to);
+	const formatted = slice
+		.map((line, i) => `${from + i}|${line}`)
+		.join("\n");
+	return { content: formatted, totalLines: total, startLine: from, endLine: to };
+}
 
 export function createScriptTools({
 	env,
@@ -18,13 +34,26 @@ export function createScriptTools({
 
 	return {
 		read: tool({
-			description: "Read the content of one existing saved script by key.",
+			description:
+				"Read the content of one existing saved script by key. Returns content with line numbers (format: N|line). Supports optional line range to read a subset.",
 			inputSchema: zodSchema(
 				z.object({
 					key: z.string().describe("Existing script key to read."),
+					start_line: z
+						.number()
+						.int()
+						.min(1)
+						.optional()
+						.describe("First line to return (1-based, inclusive). Defaults to 1."),
+					end_line: z
+						.number()
+						.int()
+						.min(1)
+						.optional()
+						.describe("Last line to return (1-based, inclusive). Defaults to end of file."),
 				}),
 			),
-			execute: async ({ key }) => {
+			execute: async ({ key, start_line, end_line }) => {
 				if (!KEY_RE.test(key)) {
 					return { ok: false, error: `Invalid script key: ${key}` };
 				}
@@ -32,7 +61,8 @@ export function createScriptTools({
 				if (!result || "missingObject" in result) {
 					return { ok: false, error: `Script "${key}" not found.` };
 				}
-				return { ok: true, key, content: result.content };
+				const formatted = formatWithLineNumbers(result.content, start_line, end_line);
+				return { ok: true, key, ...formatted };
 			},
 		}),
 		search: tool({
@@ -225,6 +255,14 @@ export function createScriptTools({
 					message:
 						"Saved a patch draft for review. The user will accept or reject the change.",
 				};
+			},
+		}),
+		list: tool({
+			description: "List all saved script keys.",
+			inputSchema: zodSchema(z.object({})),
+			execute: async () => {
+				const list = await store.list();
+				return { ok: true, scripts: list.keys.map((k) => k.name) };
 			},
 		}),
 	};

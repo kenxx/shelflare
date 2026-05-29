@@ -1,5 +1,5 @@
 import type { MiddlewareHandler } from "hono";
-import { getBearerToken, verifyJwt } from "./lib/jwt";
+import { getBearerToken, verifyJwt } from "./auth/jwt";
 import type { AppEnv } from "./types";
 
 export const requireAuth: MiddlewareHandler<AppEnv> = async (c, next) => {

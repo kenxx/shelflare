@@ -3,8 +3,8 @@ import {
 	type ChatRequest,
 	mergeWithPersistedMessages,
 	streamChatCompletion,
-} from "../lib/chat/chat-ai";
-import { chatStore } from "../lib/chat-store";
+} from "../chat/ai";
+import { chatStore } from "../chat/store";
 import { requireAuth } from "../middleware";
 import type { AppEnv } from "../types";
 
