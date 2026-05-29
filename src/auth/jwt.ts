@@ -1,7 +1,13 @@
 import type { Context } from "hono";
-import type { Bindings } from "../types";
 
 const JWT_EXPIRE_SECS = 86400; // 24h
+
+export type JwtPayload = {
+	sub: string;
+	username: string;
+	role: "admin" | "user";
+	exp: number;
+};
 
 function b64url(str: string): string {
 	return btoa(str).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
@@ -11,10 +17,20 @@ function b64urlDecode(str: string): string {
 	return atob(str.replace(/-/g, "+").replace(/_/g, "/"));
 }
 
-export async function signJwt(sub: string, secret: string): Promise<string> {
+export async function signJwt(
+	user: { id: string; username: string; role: "admin" | "user" },
+	secret: string,
+): Promise<string> {
 	const now = Math.floor(Date.now() / 1000);
 	const header = b64url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
-	const payload = b64url(JSON.stringify({ sub, exp: now + JWT_EXPIRE_SECS }));
+	const payload = b64url(
+		JSON.stringify({
+			sub: user.id,
+			username: user.username,
+			role: user.role,
+			exp: now + JWT_EXPIRE_SECS,
+		}),
+	);
 	const data = `${header}.${payload}`;
 	const key = await crypto.subtle.importKey(
 		"raw",
@@ -35,17 +51,18 @@ export async function signJwt(sub: string, secret: string): Promise<string> {
 export async function verifyJwt(
 	token: string,
 	secret: string,
-): Promise<boolean> {
+): Promise<JwtPayload | null> {
 	const parts = token.split(".");
-	if (parts.length !== 3) return false;
+	if (parts.length !== 3) return null;
 	const data = `${parts[0]}.${parts[1]}`;
-	let payload: { exp?: number };
+	let payload: JwtPayload;
 	try {
-		payload = JSON.parse(b64urlDecode(parts[1])) as { exp?: number };
+		payload = JSON.parse(b64urlDecode(parts[1])) as JwtPayload;
 	} catch {
-		return false;
+		return null;
 	}
-	if (!payload.exp || payload.exp < Math.floor(Date.now() / 1000)) return false;
+	if (!payload.exp || payload.exp < Math.floor(Date.now() / 1000)) return null;
+	if (!payload.sub || !payload.username || !payload.role) return null;
 	const key = await crypto.subtle.importKey(
 		"raw",
 		new TextEncoder().encode(secret),
@@ -57,29 +74,18 @@ export async function verifyJwt(
 	try {
 		sigBytes = Uint8Array.from(b64urlDecode(parts[2]), (c) => c.charCodeAt(0));
 	} catch {
-		return false;
+		return null;
 	}
-	return crypto.subtle.verify(
+	const verified = await crypto.subtle.verify(
 		"HMAC",
 		key,
 		sigBytes,
 		new TextEncoder().encode(data),
 	);
+	return verified ? payload : null;
 }
 
-export function getBearerToken(
-	c: Context<{ Bindings: Bindings }>,
-): string | null {
+export function getBearerToken(c: Context): string | null {
 	const auth = c.req.header("Authorization") ?? "";
 	return auth.startsWith("Bearer ") ? auth.slice(7) : null;
-}
-
-// timingSafeEqual 用 SHA-256 防止时序攻击
-export async function safeEqual(a: string, b: string): Promise<boolean> {
-	const enc = new TextEncoder();
-	const [ha, hb] = await Promise.all([
-		crypto.subtle.digest("SHA-256", enc.encode(a)),
-		crypto.subtle.digest("SHA-256", enc.encode(b)),
-	]);
-	return crypto.subtle.timingSafeEqual(ha, hb);
 }

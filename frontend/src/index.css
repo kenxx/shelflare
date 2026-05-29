@@ -128,3 +128,14 @@
     @apply font-sans;
     }
 }
+
+@layer components {
+  .script-diff-host > .cm-mergeView {
+    height: 100%;
+    overflow: auto;
+  }
+
+  .script-diff-host .cm-mergeViewEditors {
+    min-height: 100%;
+  }
+}
